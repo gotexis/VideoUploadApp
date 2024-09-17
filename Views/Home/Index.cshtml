@@ -1,9 +1,60 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+﻿@model List<VideoFileModel>
+
+@{
+    ViewData["Title"] = "Video Catalogue";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://docs.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<h1>@ViewData["Title"]</h1>
+
+<div id="uploadForm">
+    <h2>Upload Video</h2>
+    <form asp-action="Upload" method="post" enctype="multipart/form-data">
+        <input type="file" name="files" multiple accept=".mp4" />
+        <button type="submit">Upload</button>
+    </form>
 </div>
-    
+
+<div id="catalogue">
+    <h2>Video Catalogue</h2>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>File Name</th>
+                <th>File Size</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var file in Model)
+            {
+                <tr>
+                    <td>@file.FileName</td>
+                    <td>@(file.FileSize / 1024 / 1024) MB</td>
+                    <td><button class="play-video" data-filename="@file.FileName">Play</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<div id="videoPlayer" style="display: none;">
+    <h2>Video Player</h2>
+    <video id="player" controls style="max-width: 100%; height: auto;"></video>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function() {
+            const $catalogue = $('#catalogue');
+            const $videoPlayer = $('#videoPlayer');
+            const $player = $('#player');
+
+            $catalogue.on('click', '.play-video', function() {
+                const fileName = $(this).data('filename');
+                $player.attr('src', '/media/' + fileName);
+                $videoPlayer.show();
+                $player[0].play();
+            });
+        });
+    </script>
+}
