@@ -10,17 +10,18 @@ public class HomeController : Controller
     private readonly ILogger<HomeController> _logger;
     private readonly IWebHostEnvironment _environment;
     private const string MediaFolder = "media";
+    private readonly string mediaPath;
 
     public HomeController(ILogger<HomeController> logger, IWebHostEnvironment environment)
     {
         _logger = logger;
         _environment = environment;
+        mediaPath = Path.Combine(_environment.WebRootPath, MediaFolder);
     }
 
-    public IActionResult Index()
+    private List<VideoFileModel> GetVideoFiles()
     {
-        var mediaPath = Path.Combine(_environment.WebRootPath, MediaFolder);
-        var files = Directory.GetFiles(mediaPath, "*.mp4")
+        return Directory.GetFiles(this.mediaPath, "*.mp4")
             .Select(f => new FileInfo(f))
             .Select(f => new VideoFileModel
             {
@@ -28,47 +29,66 @@ public class HomeController : Controller
                 FileSize = f.Length
             })
             .ToList();
+    }
 
+    public IActionResult Index()
+    {
+        var files = GetVideoFiles();
         return View(files);
     }
 
+    [RequestSizeLimit(200 * 1024 * 1024)]
+    [DisableRequestSizeLimit]
     [HttpPost]
     public async Task<IActionResult> Upload(List<IFormFile> files)
     {
-        var mediaPath = Path.Combine(_environment.WebRootPath, MediaFolder);
+        HttpContext.Response.StatusCode = StatusCodes.Status200OK;
 
-        if (!Directory.Exists(mediaPath))
+        var response = new 
+        { 
+            success = true, 
+            message = "Files uploaded successfully", 
+        };
+
+        if (files == null || files.Count == 0)
         {
-            Directory.CreateDirectory(mediaPath);
-        }
-
-        foreach (var file in files)
-        {
-            if (file.ContentType != "video/mp4")
+            if (Request.ContentLength > 200 * 1024 * 1024)
             {
-                ModelState.AddModelError("", $"File {file.FileName} is not an MP4 file.");
-                continue;
+                response = new { success = false, message = "Files too large!" };
+                HttpContext.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
             }
-
-            if (file.Length > 200 * 1024 * 1024) // 200 MB limit
+            else
             {
-                ModelState.AddModelError("", $"File {file.FileName} exceeds the 200 MB limit.");
-                continue;
-            }
-
-            var filePath = Path.Combine(mediaPath, file.FileName);
-            using (var stream = new FileStream(filePath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
+                response = new { success = false, message = "No files!" };
+                HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
             }
         }
-
-        if (!ModelState.IsValid)
+        else
         {
-            return View("Index");
+            if (!Directory.Exists(mediaPath))
+            {
+                Directory.CreateDirectory(mediaPath);
+            }
+
+            foreach (var file in files)
+            {
+                if (file.ContentType != "video/mp4")
+                {
+                    response = new { success = false, message = $"File {file.FileName} is not Mp4 format" };
+                    HttpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+                    continue;
+                }
+
+                var filePath = Path.Combine(this.mediaPath, file.FileName);
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+            }
         }
 
-        return RedirectToAction("Index");
+        return Json(response);
     }
 
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
